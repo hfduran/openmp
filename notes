@@ -1,0 +1,2 @@
+- There can be no "omp single" inside a "omp for". That's because omp does not allow nested "work splitting" control. The omp for already splits the work.
+- Using the same logic, there cannot be nested omp fors

@@ -1,0 +1,149 @@
+================================================================================
+                    OPENMP QUICK REFERENCE CHEAT SHEET
+================================================================================
+
+BASIC CONSTRUCTS
+--------------------------------------------------------------------------------
+#pragma omp parallel                    // Create team of threads
+#pragma omp parallel num_threads(N)     // Specify thread count
+#pragma omp for                         // Divide loop iterations
+#pragma omp parallel for                // Combined (most common)
+
+THREAD INFO
+--------------------------------------------------------------------------------
+int tid = omp_get_thread_num();         // My thread ID (0, 1, 2, ...)
+int nt = omp_get_num_threads();         // Total threads in team
+omp_set_num_threads(N);                 // Set default thread count
+
+VARIABLE SCOPING
+--------------------------------------------------------------------------------
+private(var)           // Each thread has own copy (uninitialized)
+shared(var)            // All threads share same variable
+firstprivate(var)      // Private, initialized with original value
+lastprivate(var)       // Private, original gets value from last iteration
+reduction(op:var)      // Private copies, combined with op at end
+                       // ops: +, *, -, min, max, &&, ||
+
+DEFAULT RULES: Variables outside parallel = shared
+               Variables inside parallel = private
+               Loop variables = private
+
+SYNCHRONIZATION
+--------------------------------------------------------------------------------
+#pragma omp critical           // Only one thread at a time (uses locks)
+#pragma omp critical(name)     // Named critical section
+
+#pragma omp atomic             // Single operation, hardware-level (faster!)
+    var++;                     // Only simple ops: ++, --, +=, -=, *=, /=
+
+#pragma omp barrier            // All threads wait here
+
+#pragma omp master             // Only thread 0 executes (no barrier)
+
+#pragma omp single             // One thread executes (implicit barrier)
+#pragma omp single nowait      // One thread executes (no barrier)
+
+SCHEDULING
+--------------------------------------------------------------------------------
+schedule(static)               // Equal chunks, predictable (default)
+schedule(static, chunk)        // Chunks of size 'chunk', round-robin
+schedule(dynamic)              // On-demand, good for variable workload
+schedule(dynamic, chunk)       // Grab 'chunk' iterations at a time
+schedule(guided)               // Adaptive: large chunks → small chunks
+
+ADVANCED
+--------------------------------------------------------------------------------
+#pragma omp sections           // Different tasks (not loop iterations)
+{
+    #pragma omp section
+    { task1(); }
+    #pragma omp section
+    { task2(); }
+}
+
+#pragma omp task               // Dynamic task creation
+#pragma omp taskwait           // Wait for child tasks
+
+collapse(n)                    // Merge n nested loops
+    #pragma omp parallel for collapse(2)
+    for (i...) for (j...)
+
+nowait                         // Remove implicit barrier
+    #pragma omp for nowait
+
+COMMON PATTERNS
+--------------------------------------------------------------------------------
+1. SIMPLE LOOP PARALLELIZATION:
+   #pragma omp parallel for
+   for (int i = 0; i < N; i++) { work(i); }
+
+2. REDUCTION (sum, product, min, max):
+   double sum = 0;
+   #pragma omp parallel for reduction(+:sum)
+   for (int i = 0; i < N; i++) { sum += array[i]; }
+
+3. MATRIX OPERATIONS:
+   #pragma omp parallel for collapse(2)
+   for (int i = 0; i < N; i++)
+       for (int j = 0; j < M; j++)
+           matrix[i][j] = compute(i, j);
+
+4. UPDATING SHARED VARIABLE:
+   #pragma omp parallel for
+   for (int i = 0; i < N; i++) {
+       if (condition) {
+           #pragma omp critical
+           { shared_var++; }
+       }
+   }
+
+5. MULTIPLE RELATED SHARED VARIABLES:
+   #pragma omp critical
+   {
+       if (val > max_val) {
+           max_val = val;    // Update both atomically
+           max_idx = i;
+       }
+   }
+
+6. TASKS FOR RECURSION:
+   #pragma omp parallel
+   {
+       #pragma omp single
+       { recursive_function(data); }
+   }
+
+   void recursive_function(data) {
+       if (base_case) return;
+       #pragma omp task
+       { recursive_function(left); }
+       #pragma omp task
+       { recursive_function(right); }
+       #pragma omp taskwait
+   }
+
+PERFORMANCE TIPS
+--------------------------------------------------------------------------------
+✓ Use reduction instead of critical when possible (much faster)
+✓ Use atomic instead of critical for single operations (faster)
+✓ Use dynamic scheduling for variable workload
+✓ Use collapse for nested loops with few outer iterations
+✓ Use nowait to eliminate unnecessary barriers
+✓ Minimize critical sections (they serialize execution)
+✗ Don't parallelize tiny loops (overhead > benefit)
+✗ Don't use too many threads (overhead, cache conflicts)
+
+COMPILATION
+--------------------------------------------------------------------------------
+gcc -fopenmp program.c -o program       // Compile with OpenMP
+export OMP_NUM_THREADS=4                // Set thread count (env var)
+
+COMMON MISTAKES
+--------------------------------------------------------------------------------
+✗ Race condition: Multiple threads write to shared var without sync
+✗ Nesting work-sharing: Can't nest 'for' or 'single' inside 'for'
+✗ Using reduction on complex operations (use critical instead)
+✗ Forgetting barriers when needed (data dependencies)
+✗ Integer overflow (use long long for large reductions)
+
+================================================================================
